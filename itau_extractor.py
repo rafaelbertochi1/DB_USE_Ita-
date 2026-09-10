@@ -129,6 +129,22 @@ def _campo_texto(text, label_regex):
     return tokens[indice]
 
 
+def _area_averbada(text):
+    """'Área Averbada' fica ao lado de 'Divisão Interna' no modelo
+    Eletrônico - uma lista de cômodos de tamanho variável (Cozinha,
+    Dormitório, Suíte...). Quando o 1º item dessa lista tem mais de uma
+    palavra (ex: 'Sala de Estar'), a conta de coluna por token de
+    `_linha_e_indice_coluna` erra o valor. Como nome de cômodo nunca tem
+    número, procura direto o próximo número decimal (com vírgula) depois
+    do rótulo, numa janela curta - funciona nos dois modelos.
+    """
+    m = re.search(
+        r'[ÁA]rea\s+Averbada\s*\(em\s*m[²2]\)(.{0,200}?)(\d+,\d{1,2})',
+        text, re.IGNORECASE | re.DOTALL
+    )
+    return m.group(2) if m else None
+
+
 def extrair_codigo_laudo(text):
     m = re.search(r'#([A-Z]{2,6}\d+)', text)
     return m.group(1) if m else None
@@ -149,9 +165,17 @@ def extrair_endereco_numero_complemento(text):
         r'Endere[çc]o\s+N[uú]mero\s+Complemento\n(.+?)\s+(\d+|S/N)\s*(.*)',
         text, re.IGNORECASE
     )
-    if m:
-        return limpar_txt(m.group(1)), limpar_txt(m.group(2), "S/N"), limpar_txt(m.group(3))
-    return "", "S/N", ""
+    if not m:
+        return "", "S/N", ""
+
+    complemento_bruto = m.group(3)
+    # quando o Complemento vem vazio no laudo, o pdfplumber às vezes gruda
+    # o cabeçalho da linha seguinte ("CEP Bairro Município UF") direto
+    # depois do número, na mesma linha - corta o texto ali pra não gravar
+    # isso como se fosse um complemento de verdade.
+    complemento_bruto = re.split(r'\bCEP\s+Bairro\b', complemento_bruto, flags=re.IGNORECASE)[0]
+
+    return limpar_txt(m.group(1)), limpar_txt(m.group(2), "S/N"), limpar_txt(complemento_bruto)
 
 
 def extrair_coordenadas(text):
@@ -227,7 +251,7 @@ def extrair_dados_pdf(pdf_path):
             padrao_acabamento = _campo_texto(full_text, r'Padr[ãa]o\s+de\s+Acabamento\s+do\s+Im[óo]vel')
             estado_conservacao = _campo_texto(full_text, r'Estado\s+de\s+Conserva[çc][ãa]o\s+do\s+Im[óo]vel')
 
-            area_averbada = _campo_numerico(full_text, r'[ÁA]rea\s+Averbada\s*\(em\s*m[²2]\)')
+            area_averbada = _area_averbada(full_text)
             area_comum = _campo_numerico(full_text, r'[ÁA]rea\s+Comum\s*\(em\s*m[²2]\)')
             area_total = _campo_numerico(full_text, r'[ÁA]rea\s+[Tt]otal\s*\(em\s*m[²2]\)')
 
