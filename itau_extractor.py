@@ -221,13 +221,21 @@ def extrair_valor_avaliacao(text):
     return m.group(1) if m else None
 
 
-def extrair_valor_unitario_m2(text):
-    m = re.search(
-        r'[ÁA]rea\s+constru[íi]da\s*\(m[²2]\)\s+Valor\s+unit[áa]rio\s*\(R\$/m[²2]\)\s+Valor\s+parcial\s*\(R\$\)'
-        r'\n[\d\.,]+\s+R\$\s*([\d\.,]+)',
-        text, re.IGNORECASE
-    )
-    return m.group(1) if m else None
+def extrair_area_terreno(text):
+    """A seção TERRENO do laudo só traz uma área própria quando o imóvel é
+    'Isolado' (terreno exclusivo) - quando é 'Condomínio', só mostra
+    Fração Ideal (%), sem m² (nesse caso retorna None, o que é esperado,
+    não é falha de extração). Procura só DEPOIS do cabeçalho 'TERRENO'
+    pra não confundir com a área do imóvel (construção) que vem antes.
+    """
+    m_secao = re.search(r'\bTERRENO\b', text)
+    if not m_secao:
+        return None
+    texto_apos_terreno = text[m_secao.end():]
+    valor = _campo_numerico(texto_apos_terreno, r'[ÁA]rea\s+[Tt]otal\s*\(em\s*m[²2]\)')
+    if valor is None:
+        valor = _campo_numerico(texto_apos_terreno, r'[ÁA]rea\s+Averbada\s*\(em\s*m[²2]\)')
+    return valor
 
 
 def extrair_dados_pdf(pdf_path):
@@ -254,6 +262,8 @@ def extrair_dados_pdf(pdf_path):
             area_averbada = _area_averbada(full_text)
             area_comum = _campo_numerico(full_text, r'[ÁA]rea\s+Comum\s*\(em\s*m[²2]\)')
             area_total = _campo_numerico(full_text, r'[ÁA]rea\s+[Tt]otal\s*\(em\s*m[²2]\)')
+            area_nao_averbada = _campo_numerico(full_text, r'[ÁA]rea\s+n[ãa]o\s+Averbada\s*\(em\s*m[²2]\)')
+            area_terreno = extrair_area_terreno(full_text)
 
             quartos = _campo_numerico(full_text, r'Total\s+de\s+Dormit[óo]rios', tipo='int')
             suites = _campo_numerico(full_text, r'N[°º]\s*de\s*Su[íi]tes', tipo='int')
@@ -263,7 +273,23 @@ def extrair_dados_pdf(pdf_path):
 
             data_avaliacao = extrair_data_vistoria(full_text)
             valor_avaliacao = extrair_valor_avaliacao(full_text)
-            valor_unitario_m2 = extrair_valor_unitario_m2(full_text)
+
+            area_privativa_dec = converter_float_seguro(area_averbada)
+            area_terreno_dec = converter_float_seguro(area_terreno)
+            valor_mercado_dec = converter_float_seguro(valor_avaliacao)
+
+            # valor unitário não vem mais direto do PDF (o laudo às vezes usa
+            # uma terceira métrica, "Área Estimada", pra essa conta, o que
+            # confundia comparação com area_privativa_m2 gravado aqui) -
+            # agora é sempre calculado por nós: valor de mercado dividido
+            # pela área privativa, ou pela área de terreno quando não há
+            # área privativa (caso de terreno).
+            if area_privativa_dec > 0:
+                valor_unitario_m2 = (valor_mercado_dec / area_privativa_dec).quantize(Decimal('0.01'))
+            elif area_terreno_dec > 0:
+                valor_unitario_m2 = (valor_mercado_dec / area_terreno_dec).quantize(Decimal('0.01'))
+            else:
+                valor_unitario_m2 = ZERO
 
             return {
                 "numero_proposta": numero_proposta,
@@ -273,9 +299,11 @@ def extrair_dados_pdf(pdf_path):
                 "numero": numero,
                 "complemento": complemento,
                 "tipo_imovel": limpar_txt(tipo_imovel, "Apartamento"),
-                "area_privativa_m2": converter_float_seguro(area_averbada),
+                "area_privativa_m2": area_privativa_dec,
                 "area_comum_m2": converter_float_seguro(area_comum),
                 "area_total_m2": converter_float_seguro(area_total),
+                "area_nao_averbada_m2": converter_float_seguro(area_nao_averbada),
+                "area_terreno_m2": area_terreno_dec,
                 "quartos": converter_int_seguro(quartos),
                 "suites": converter_int_seguro(suites),
                 "banheiros": converter_int_seguro(banheiros),
@@ -283,11 +311,11 @@ def extrair_dados_pdf(pdf_path):
                 "idade_anos": converter_int_seguro(idade_anos),
                 "padrao_acabamento": limpar_txt(padrao_acabamento, "Normal"),
                 "estado_conservacao": limpar_txt(estado_conservacao, "Bom"),
-                "valor_mercado": converter_float_seguro(valor_avaliacao),
+                "valor_mercado": valor_mercado_dec,
                 # o modelo do Itaú não tem um valor de "venda forçada"
                 # separado (diferente do Santander) - fica zerado.
                 "valor_venda_forcada": ZERO,
-                "valor_unitario_m2": converter_float_seguro(valor_unitario_m2),
+                "valor_unitario_m2": valor_unitario_m2,
                 "coordenadas": coords_str,
                 "latitude": lat,
                 "longitude": lon,
@@ -340,6 +368,8 @@ def processar_em_lote():
                     area_privativa_m2 NUMERIC,
                     area_comum_m2 NUMERIC,
                     area_total_m2 NUMERIC,
+                    area_nao_averbada_m2 NUMERIC,
+                    area_terreno_m2 NUMERIC,
                     quartos INTEGER,
                     suites INTEGER,
                     banheiros INTEGER,
@@ -357,6 +387,10 @@ def processar_em_lote():
                     modelo_usado TEXT
                 );
             """)
+            # tabela pode já existir de uma execução anterior sem essas
+            # colunas - adiciona se faltar, sem apagar os dados já gravados.
+            cursor.execute("ALTER TABLE laudos_itau ADD COLUMN IF NOT EXISTS area_nao_averbada_m2 NUMERIC;")
+            cursor.execute("ALTER TABLE laudos_itau ADD COLUMN IF NOT EXISTS area_terreno_m2 NUMERIC;")
             cursor.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS laudos_itau_codigo_laudo_key
                 ON laudos_itau (codigo_laudo) WHERE codigo_laudo IS NOT NULL;
