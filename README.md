@@ -103,14 +103,9 @@ sessão fica salva em `sessao_inspectos_itau.json` (local, fora do Git).
 O robô vai pedir a data inicial e final do período. Teste primeiro com um
 período curto antes de rodar um intervalo grande.
 
-> **Atenção:** o fluxo de clique dentro de "baixar um laudo" foi copiado
-> do robô que já funciona para o Santander na mesma Inspectos - a
-> navegação (login, filtro de período, paginação) é igual, mas o texto
-> exato do menu de download pode ser diferente pro Itaú (o laudo dele se
-> chama "Laudo de Avaliação", não "Laudo Completo"). Rode a primeira vez
-> com `HEADLESS = False` e confira se o clique em "Laudo Completo" em
-> `itau_downloader.py` bate com o que aparece na tela; ajuste o texto se
-> for diferente.
+Validado em teste real: 36 de 36 laudos baixados sem nenhum erro, com o
+mesmo fluxo de clique usado no robô do Santander (incluindo o botão
+"Laudo Completo" no menu de download).
 
 ### 5. Extrair os dados para o banco
 
