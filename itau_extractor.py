@@ -362,16 +362,15 @@ def processar_em_lote():
                 ON laudos_itau (codigo_laudo) WHERE codigo_laudo IS NOT NULL;
             """)
 
-            # pula PDF que já está no banco - evita reextrair à toa
-            cursor.execute("SELECT path FROM laudos_itau WHERE path IS NOT NULL;")
-            ja_processados = {row[0] for row in cursor.fetchall()}
-
-    pdf_files = [os.path.join(folder_path, f) for f in todos_pdfs if f not in ja_processados]
-    pulados_ja_no_banco = len(todos_pdfs) - len(pdf_files)
-    print(f"  {pulados_ja_no_banco} já estavam no banco (extração pulada), {len(pdf_files)} novo(s) pra processar.")
+    # reprocessa todo PDF da pasta sempre (não só os novos) - como a
+    # gravação usa ON CONFLICT (codigo_laudo) DO UPDATE, isso só atualiza
+    # os registros existentes sem duplicar nada. É de propósito: assim,
+    # depois de um ajuste no parser, basta rodar de novo pra corrigir os
+    # dados já gravados, sem precisar apagar nada no banco antes.
+    pdf_files = [os.path.join(folder_path, f) for f in todos_pdfs]
 
     if not pdf_files:
-        print("Nada novo pra extrair.")
+        print("Nenhum PDF pra processar.")
         conn.close()
         return
 
