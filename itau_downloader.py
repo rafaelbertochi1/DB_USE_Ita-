@@ -52,10 +52,12 @@ PARALELISMO = 3
 
 MODO_RAPIDO = True  # remove a pausa artificial entre cliques
 
-# login e seleção de cliente são automáticos, não precisa ver a janela.
-# se a sessão expirar de verdade, o robô avisa e para (não dá pra fazer
-# login manual headless) - muda pra False, refaz o login uma vez, volta.
-HEADLESS = True
+# mantém a janela do Chrome visível em toda execução (por escolha, pra
+# poder acompanhar o robô agindo) - o login e a seleção de cliente
+# continuam automáticos, mas você vê a tela e pode intervir se algo
+# não bater com o esperado. Ainda dá pra rodar sem tela (mais rápido,
+# sem janela) mudando pra True aqui.
+HEADLESS = False
 
 # cada linha da lista é uma div (não uma <table> de verdade), confirmado
 # via Inspecionar elemento no robô do Santander. A tela tem abas
