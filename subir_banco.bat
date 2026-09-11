@@ -3,13 +3,19 @@ REM Abre o Docker Desktop (se nao estiver aberto), espera ele ficar pronto,
 REM e sobe o Postgres + Adminer compartilhado (o mesmo banco usado pelo
 REM Automatiza-o-Uono e por este projeto).
 REM
-REM Se o caminho abaixo nao bater com onde voce clonou o Automatiza-o-Uono
-REM na sua maquina, so editar a linha PASTA_AUTOMATIZA.
+REM Se a busca abaixo nao achar a pasta do Automatiza-o-Uono na sua
+REM maquina, so editar a linha BASE_GITHUB.
 
 setlocal
 
-set "PASTA_AUTOMATIZA=%USERPROFILE%\Documents\GitHub\Automatiza-o-Uono"
+set "BASE_GITHUB=%USERPROFILE%\Documents\GitHub"
 set "DOCKER_DESKTOP_EXE=C:\Program Files\Docker\Docker\Docker Desktop.exe"
+
+REM acha a pasta do Automatiza-o-Uono por padrao (o nome exato pode
+REM variar - "Automatiza-o-Uono", "Automatiza-o-Uono-limpo" etc.) em vez
+REM de exigir o nome certinho.
+set "PASTA_AUTOMATIZA="
+for /d %%A in ("%BASE_GITHUB%\Automatiza*") do set "PASTA_AUTOMATIZA=%%A"
 
 REM a pasta "Backend l Script Extração Laudos" tem acento no nome, o que
 REM costuma embaralhar em .bat (aparece tipo "Extra├º├úo") dependendo da
@@ -17,7 +23,7 @@ REM codificação do arquivo - em vez de digitar o nome acentuado, acha a
 REM pasta por um pedaço só em ASCII (funciona mesmo se o acento
 REM aparecer errado aqui).
 set "PASTA_DOCKER_COMPOSE="
-for /d %%D in ("%PASTA_AUTOMATIZA%\Backend*") do set "PASTA_DOCKER_COMPOSE=%%D"
+if defined PASTA_AUTOMATIZA for /d %%D in ("%PASTA_AUTOMATIZA%\Backend*") do set "PASTA_DOCKER_COMPOSE=%%D"
 
 echo ============================================================
 echo  Subindo o banco (Postgres + Adminer)
@@ -50,12 +56,19 @@ if errorlevel 1 goto esperar_docker
 echo [2/3] Docker pronto.
 
 REM --- 2. Sobe o Postgres + Adminer compartilhado ---
+if not defined PASTA_AUTOMATIZA (
+    echo.
+    echo [ERRO] Nao encontrei nenhuma pasta comecando com "Automatiza" em:
+    echo   %BASE_GITHUB%
+    echo Edite a linha BASE_GITHUB no topo deste .bat com o caminho onde
+    echo fica a pasta do GitHub na sua maquina.
+    pause
+    exit /b 1
+)
 if not defined PASTA_DOCKER_COMPOSE (
     echo.
     echo [ERRO] Nao encontrei a pasta "Backend..." dentro de:
     echo   %PASTA_AUTOMATIZA%
-    echo Edite a linha PASTA_AUTOMATIZA no topo deste .bat com o
-    echo caminho onde voce clonou o Automatiza-o-Uono.
     pause
     exit /b 1
 )
