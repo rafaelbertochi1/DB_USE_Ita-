@@ -62,7 +62,14 @@ playwright install chromium
 
 ### 3. Garantir que o Postgres compartilhado está rodando
 
-No repositório Automatiza-o-Uono, dentro da pasta
+**No Windows**, dá pra usar o `subir_banco.bat` deste repositório - ele
+abre o Docker Desktop (se não estiver aberto), espera ficar pronto, e
+sobe os containers sozinho. É só dar dois cliques nele. Se o Automatiza-
+o-Uono estiver clonado em outro lugar que não
+`Documents\GitHub\Automatiza-o-Uono`, edite a linha
+`PASTA_DOCKER_COMPOSE` no topo do arquivo.
+
+Ou manualmente: no repositório Automatiza-o-Uono, dentro da pasta
 `Backend l Script Extração Laudos`:
 
 ```bash
